@@ -1,8 +1,5 @@
 package com.example.customcontrolleradvicewithaop.aspects;
 
-import com.example.customcontrolleradvicewithaop.annotations.CustomExceptionHandler;
-import com.example.customcontrolleradvicewithaop.exceptions.CustomBadRequestException;
-import com.example.customcontrolleradvicewithaop.exceptions.CustomNotFoundException;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.stereotype.Component;
 
@@ -34,23 +31,12 @@ public class ControllersExceptionHandlingAspect {
     )
     public ResponseEntity<?> handleCustomExceptions(Exception exception) {
 
-        // specialization : get the specific type of thrown exception
-        Class<? extends Exception> exceptionType = exception.getClass();
-
-        // trying to get the method for the exception type and perform it...
-        for (Method method : exceptionType.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(ExceptionHandler.class)) {
-                ExceptionHandler annotation = method.getAnnotation(ExceptionHandler.class);
-                Class<?>[] exceptionTypes = annotation.value(); // get the list of all exceptions putted in the annotation
-                for (Class<?> type : exceptionTypes) { // we can get rid of this loop by ensuring we are put only one exception type per annotated method
-                    if (type.isAssignableFrom(exceptionType)) {
-                        try {
-                            return (ResponseEntity<?>) method.invoke(null, exception);
-                        } catch (IllegalAccessException | InvocationTargetException e) {
-                            return getInternalServerErrorResponse();
-                        }
-                    }
-                }
+        Optional<Method> method = findHandlerMethodWithExceptionType(exception);
+        if (method.isPresent()) {
+            try {
+                return (ResponseEntity<?>) method.get().invoke(null, exception);
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                return getInternalServerErrorResponse();
             }
         }
 
@@ -65,8 +51,8 @@ public class ControllersExceptionHandlingAspect {
         Class<? extends Exception> exceptionType = exception.getClass();
 
         for (Method method : this.getClass().getDeclaredMethods()) {
-            if (method.isAnnotationPresent(CustomExceptionHandler.class)) {
-                CustomExceptionHandler annotation = method.getAnnotation(CustomExceptionHandler.class);
+            if (method.isAnnotationPresent(ExceptionHandler.class)) {
+                ExceptionHandler annotation = method.getAnnotation(ExceptionHandler.class);
                 if (Arrays.asList(annotation.value()).contains(exceptionType)) {
                     return Optional.of(method);
                 }
